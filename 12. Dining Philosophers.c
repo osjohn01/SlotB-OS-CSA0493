@@ -1,46 +1,61 @@
 #include <stdio.h>
-#include <string.h>
+#include <semaphore.h>
+#include <pthread.h>
 
-#define MAX_FILES 10
-#define MAX_FILENAME_LENGTH 20
+#define N 5 /* Number of philosophers */
 
-struct file {
-    char name[MAX_FILENAME_LENGTH];
-    int size;
-};
+sem_t chopsticks[N]; /* semaphores representing chopsticks */
 
-struct directory {
-    struct file files[MAX_FILES];
-    int num_files;
-};
+void *philosopher(void *num) {
+    int i = *((int *)num);
+    printf("Philosopher %d is thinking\n", i+1);
+    while (1) {
+        /* philosopher is hungry */
+        printf("Philosopher %d is hungry\n", i+1);
 
-void init_directory(struct directory *dir) {
-    dir->num_files = 0;
-}
+        /* wait for left chopstick */
+        sem_wait(&chopsticks[i]);
+        printf("Philosopher %d picked up left chopstick %d\n", i+1, i+1);
 
-int add_file(struct directory *dir, char name[], int size) {
-    if (dir->num_files >= MAX_FILES) {
-        return -1; /* return -1 if directory is full */
-    }
-    strcpy(dir->files[dir->num_files].name, name);
-    dir->files[dir->num_files].size = size;
-    dir->num_files++;
-    return 0;
-}
+        /* wait for right chopstick */
+        sem_wait(&chopsticks[(i+1)%N]);
+        printf("Philosopher %d picked up right chopstick %d\n", i+1, (i+1)%N+1);
 
-void list_files(struct directory dir) {
-    int i;
-    for (i = 0; i < dir.num_files; i++) {
-        printf("%s (size: %d bytes)\n", dir.files[i].name, dir.files[i].size);
+        /* eat */
+        printf("Philosopher %d is eating\n", i+1);
+        sleep(3);
+
+        /* release chopsticks */
+        sem_post(&chopsticks[i]);
+        printf("Philosopher %d released left chopstick %d\n", i+1, i+1);
+        sem_post(&chopsticks[(i+1)%N]);
+        printf("Philosopher %d released right chopstick %d\n", i+1, (i+1)%N+1);
+
+        /* think */
+        printf("Philosopher %d is thinking\n", i+1);
+        sleep(3);
     }
 }
 
 int main() {
-    struct directory dir;
-    init_directory(&dir);
-    add_file(&dir, "file1.txt", 100);
-    add_file(&dir, "file2.txt", 200);
-    add_file(&dir, "file3.txt", 300);
-    list_files(dir);
+    int i;
+    pthread_t thread_id[N];
+    int philosophers[N];
+    for (i = 0; i < N; i++) {
+        sem_init(&chopsticks[i], 0, 1);
+    }
+
+    for (i = 0; i < N; i++) {
+        philosophers[i] = i;
+        pthread_create(&thread_id[i], NULL, philosopher, &philosophers[i]);
+    }
+
+    for (i = 0; i < N; i++) {
+        pthread_join(thread_id[i], NULL);
+    }
+
+    for (i = 0; i < N; i++) {
+        sem_destroy(&chopsticks[i]);
+    }
     return 0;
 }
